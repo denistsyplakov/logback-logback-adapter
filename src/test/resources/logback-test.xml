@@ -1,0 +1,13 @@
+<configuration>
+
+    <appender name="testAppender" class="io.github.denistsyplakov.logbag.TestAppender">
+    </appender>
+
+    <appender name="logback" class="io.github.denistsyplakov.logbag.LogBagAppender">
+        <appender-ref ref="testAppender"/>
+    </appender>
+
+    <root level="info">
+        <appender-ref ref="logback"/>
+    </root>
+</configuration>
