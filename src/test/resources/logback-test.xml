@@ -5,9 +5,13 @@
 
     <appender name="logback" class="io.github.denistsyplakov.logbag.LogBagAppender">
         <appender-ref ref="testAppender"/>
+        <bagTriggerLevel>WARN</bagTriggerLevel>
+        <bagPassthroughLevel>INFO</bagPassthroughLevel>
+        <maxBagSize>10</maxBagSize>
+        <maxBagSize>5</maxBagSize>
     </appender>
 
-    <root level="info">
+    <root level="trace">
         <appender-ref ref="logback"/>
     </root>
 </configuration>
