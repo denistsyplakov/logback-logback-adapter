@@ -3,6 +3,7 @@ package io.github.denistsyplakov.logbag;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 enum BagState{
     OPEN,
@@ -10,6 +11,8 @@ enum BagState{
 }
 
 class LogBagContainer {
+
+    public UUID id = UUID.randomUUID();
 
     public BagState state = BagState.CLOSED;
 
@@ -19,4 +22,7 @@ class LogBagContainer {
 
     public ArrayList<ILoggingEvent> events = new ArrayList<>();
 
+    public long maxBagTTLSec;
+
+    public long maxBagSize;
 }

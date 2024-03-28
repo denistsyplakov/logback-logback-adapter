@@ -11,14 +11,43 @@ import java.util.*;
 
 /**
  * LogBag Adapter for logback framework.
- *
- * Important note: Bags should be closed properly. Otherwise, there will be resource leakage.
  */
 public class LogBagAppender extends AppenderBase<ILoggingEvent> implements AppenderAttachable<ILoggingEvent> {
 
-    AppenderAttachableImpl<ILoggingEvent> aai = new AppenderAttachableImpl<>();
+    private static final Timer checkBags = new Timer("LogBagAppenderTimer", true);
+
+    static {
+        checkBags.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                synchronized (LogBagAppender.class) {
+                    var bagsToClose = allBags.stream()
+                            .filter(bag -> System.currentTimeMillis() - bag.createdAt > bag.maxBagTTLSec * 1000L)
+                            .toList();
+                    bagsToClose.forEach(bag -> {
+                        instances.forEach(logBagAppender -> {
+                            System.out.println("open bag: " + bag.id);
+                            logBagAppender.openBag(bag);
+                        });
+                    });
+                }
+            }
+        }, 0, 1000);
+    }
 
     private static final ThreadLocal<LogBagContainer> bags = new ThreadLocal<>();
+
+    private static final Set<LogBagContainer> allBags = new HashSet<>();
+
+    private static final Set<LogBagAppender> instances = new HashSet<>();
+
+    public LogBagAppender() {
+        synchronized (LogBagAppender.class) {
+            instances.add(this);
+        }
+    }
+
+    AppenderAttachableImpl<ILoggingEvent> aai = new AppenderAttachableImpl<>();
 
     private Level bagTriggerLevel = Level.WARN;
 
@@ -62,11 +91,16 @@ public class LogBagAppender extends AppenderBase<ILoggingEvent> implements Appen
 
     public static void startBag() {
         if (bags.get() == null) {
-            bags.set(new LogBagContainer());
+            synchronized (LogBagAppender.class) {
+                bags.set(new LogBagContainer());
+                allBags.add(bags.get());
+            }
         } else {
             bags.get().nestLevel++;
         }
     }
+
+    //TODO add remove bag to allBags
 
     public static void finishBag() {
         LogBagContainer bag = bags.get();
@@ -80,7 +114,10 @@ public class LogBagAppender extends AppenderBase<ILoggingEvent> implements Appen
         }
         bag.nestLevel--;
         if (bag.nestLevel == 0) {
-            bags.remove();
+            synchronized (LogBagAppender.class) {
+                bags.remove();
+                allBags.remove(bag);
+            }
         }
     }
 
@@ -93,28 +130,40 @@ public class LogBagAppender extends AppenderBase<ILoggingEvent> implements Appen
     protected void append(ILoggingEvent iLoggingEvent) {
         LogBagContainer bag = bags.get();
         //Should pass through.
-        if (iLoggingEvent.getLevel().toInt() >= bagPassthroughLevel.toInt()*1000 ||
+        if (iLoggingEvent.getLevel().toInt() >= bagPassthroughLevel.toInt() * 1000 ||
                 bag == null ||
                 bag.nestLevel <= 0 ||
                 bag.state == BagState.OPEN) {
             aai.appendLoopOnAppenders(iLoggingEvent);
         }
         //no bag no fun
-        if (bag == null||bag.state == BagState.OPEN){
+        if (bag == null || bag.state == BagState.OPEN) {
             return;
         }
         //Should be stored in bag.
-        if (iLoggingEvent.getLevel().toInt() < bagPassthroughLevel.toInt()*1000 &&
-                bag.nestLevel > 0 ) {
-            bag.events.add(iLoggingEvent);
-            return;
+        if (iLoggingEvent.getLevel().toInt() < bagPassthroughLevel.toInt() * 1000 &&
+                bag.nestLevel > 0) {
+            synchronized (bag) {
+                bag.events.add(iLoggingEvent);
+            }
+            if (bag.events.size() <= bag.maxBagSize) {
+                return;
+            }
         }
         //Should open bag.
-        if (iLoggingEvent.getLevel().toInt() >= bagTriggerLevel.toInt()*1000 ||
+        if (iLoggingEvent.getLevel().toInt() >= bagTriggerLevel.toInt() * 1000 ||
+                bag.events.size() > bag.maxBagSize ||
                 System.currentTimeMillis() - bag.createdAt > maxBagTTLSec * 1000L) {
-            bag.events.forEach(aai::appendLoopOnAppenders);
-            bag.state = BagState.OPEN;
+            synchronized (LogBagAppender.class) {
+                openBag(bag);
+            }
         }
+    }
+
+    void openBag(LogBagContainer bag) {
+        bag.events.forEach(aai::appendLoopOnAppenders);
+        bag.events.clear();
+        bag.state = BagState.OPEN;
     }
 
     @Override
