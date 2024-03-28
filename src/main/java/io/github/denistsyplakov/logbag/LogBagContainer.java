@@ -12,6 +12,11 @@ enum BagState{
 
 class LogBagContainer {
 
+    public LogBagContainer(long maxBagTTLSec, long maxBagSize) {
+        this.maxBagTTLSec = maxBagTTLSec;
+        this.maxBagSize = maxBagSize;
+    }
+
     public UUID id = UUID.randomUUID();
 
     public BagState state = BagState.CLOSED;

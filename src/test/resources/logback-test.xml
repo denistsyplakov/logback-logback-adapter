@@ -8,7 +8,7 @@
         <bagTriggerLevel>WARN</bagTriggerLevel>
         <bagPassthroughLevel>INFO</bagPassthroughLevel>
         <maxBagSize>10</maxBagSize>
-        <maxBagSize>5</maxBagSize>
+        <maxBagTTLSec>600</maxBagTTLSec>
     </appender>
 
     <root level="trace">

@@ -21,15 +21,14 @@ public class LogBagAppender extends AppenderBase<ILoggingEvent> implements Appen
             @Override
             public void run() {
                 synchronized (LogBagAppender.class) {
-                    var bagsToClose = allBags.stream()
-                            .filter(bag -> System.currentTimeMillis() - bag.createdAt > bag.maxBagTTLSec * 1000L)
-                            .toList();
-                    bagsToClose.forEach(bag -> {
-                        instances.forEach(logBagAppender -> {
-                            System.out.println("open bag: " + bag.id);
-                            logBagAppender.openBag(bag);
-                        });
-                    });
+                    allBags.stream()
+                            .filter(bag1 -> System.currentTimeMillis() - bag1.createdAt > bag1.maxBagTTLSec * 1000L)
+                            .forEach(bag -> {
+                                instances.forEach(logBagAppender -> {
+                                    System.out.println("open bag: " + bag.id + " baglifetime: " + (System.currentTimeMillis() - bag.createdAt));
+                                    logBagAppender.openBag(bag);
+                                });
+                            });
                 }
             }
         }, 0, 1000);
@@ -90,9 +89,13 @@ public class LogBagAppender extends AppenderBase<ILoggingEvent> implements Appen
     }
 
     public static void startBag() {
+        if (instances.size() > 1) {
+            throw new IllegalStateException("Multiple instances of LogBagAppender detected, you should use start with appender name.");
+        }
         if (bags.get() == null) {
             synchronized (LogBagAppender.class) {
-                bags.set(new LogBagContainer());
+                var appender = instances.stream().findFirst().orElseThrow();
+                bags.set(new LogBagContainer(appender.maxBagTTLSec, appender.maxBagSize));
                 allBags.add(bags.get());
             }
         } else {
